@@ -34,8 +34,6 @@ contract Booster is
     uint public platformFee; // mirrored from feeHandler to reduce external calls
     // pool -> gauge
     mapping(address => address) public gaugeForPool;
-    // pool -> bribe
-    mapping(address => address) public bribeForPool;
     // pool -> token
     mapping(address => address) public tokenForPool; // mirrored from poolRouter to save on external calls
 
@@ -138,31 +136,6 @@ contract Booster is
         address gauge = gaugeForPool[pool];
         IGauge(gauge).withdraw(amount);
         IERC20Upgradeable(pool).transfer(msg.sender, amount);
-    }
-
-    function claimBribes(
-        address pool
-    ) external whenNotPaused returns (address[] memory bribes) {
-        address feeDistributor = bribeForPool[pool];
-        if (feeDistributor == address(0)) {
-            address gauge = voter.gauges(pool);
-            feeDistributor = voter.feeDistributers(gauge);
-            bribeForPool[pool] = feeDistributor;
-        }
-
-        IFeeDistributor feeDist = IFeeDistributor(feeDistributor);
-        bribes = feeDist.getRewardTokens();
-        feeDist.getReward(tokenID, bribes);
-
-        uint len = bribes.length;
-        for (uint i; i < len; ++i) {
-            uint bal = IERC20Upgradeable(bribes[i]).balanceOf(address(this));
-            if (bal > 0)
-                IERC20Upgradeable(bribes[i]).transfer(
-                    feeHandler,
-                    bal - unclaimedFees[bribes[i]]
-                );
-        }
     }
 
     function getRewardFromGauge(
