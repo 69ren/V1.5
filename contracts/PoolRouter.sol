@@ -24,7 +24,6 @@ contract PoolRouter is
     mapping(address => address) public tokenForPool;
 
     address public poolBeacon;
-    address public lastPool;
     address ram;
 
     function initialize(

@@ -18,8 +18,9 @@ contract Booster is
 {
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant VOTER_ROLE = keccak256("VOTER_ROLE");
+    bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
-    IVoter voter;
+    IVoter public voter;
     IVotingEscrow votingEscrow;
 
     // Ennead contracts
@@ -27,6 +28,8 @@ contract Booster is
     uint public tokenID;
     address public feeHandler;
     address public poolRouter;
+
+    address public ram;
 
     uint public platformFee; // mirrored from feeHandler to reduce external calls
     // pool -> gauge
@@ -36,7 +39,6 @@ contract Booster is
     // pool -> token
     mapping(address => address) public tokenForPool; // mirrored from poolRouter to save on external calls
 
-
     mapping(address => uint) public unclaimedFees;
 
     constructor() {
@@ -45,25 +47,45 @@ contract Booster is
 
     function initialize(
         IVoter _voter,
+        address _veDepositor,
         address admin,
         address pauser,
-        address voterRole
+        address voterRole,
+        address operator
     ) public initializer {
         __Pausable_init();
         __AccessControlEnumerable_init();
-
-        voter = _voter;
-        votingEscrow = IVotingEscrow(voter._ve());
-
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(PAUSER_ROLE, pauser);
         _grantRole(VOTER_ROLE, voterRole);
+        _grantRole(OPERATOR_ROLE, operator);
+
+        voter = _voter;
+        votingEscrow = IVotingEscrow(voter._ve());
+        ram = voter.base();
+
+        veDepositor = _veDepositor;
+        votingEscrow.setApprovalForAll(_veDepositor, true);
     }
 
-    function setAddresses(address _veDepositor, address _feeHandler, address _poolRouter) external {
-        veDepositor = _veDepositor;
-        feeHandler = _feeHandler;
-        poolRouter = _poolRouter;
+    function setAddresses(
+        address _veDepositor,
+        address _feeHandler,
+        address _poolRouter
+    ) external onlyRole(OPERATOR_ROLE) {
+        if (_veDepositor != address(0)) {
+            votingEscrow.setApprovalForAll(veDepositor, false);
+            veDepositor = _veDepositor;
+            votingEscrow.setApprovalForAll(veDepositor, true);
+        }
+        if (_feeHandler != address(0)) {
+            votingEscrow.setApprovalForAll(feeHandler, false);
+            feeHandler = _feeHandler;
+            votingEscrow.setApprovalForAll(_feeHandler, true);
+        }
+        if (_poolRouter != address(0)) {
+            poolRouter = _poolRouter;
+        }
     }
 
     function setTokenForPool(address pool, address token) external {
@@ -99,7 +121,7 @@ contract Booster is
     function depositInGauge(address pool, uint amount) external whenNotPaused {
         require(msg.sender == tokenForPool[pool], "!neadPool");
         address gauge = gaugeForPool[pool];
-         if (gauge == address(0)) {
+        if (gauge == address(0)) {
             gauge = voter.gauges(pool);
             gaugeForPool[pool] = gauge;
             IERC20Upgradeable(pool).approve(gauge, type(uint).max);
@@ -108,7 +130,10 @@ contract Booster is
         IGauge(gauge).deposit(amount, tokenID);
     }
 
-    function withdrawFromGauge(address pool, uint amount)  external whenNotPaused {
+    function withdrawFromGauge(
+        address pool,
+        uint amount
+    ) external whenNotPaused {
         require(msg.sender == tokenForPool[pool], "!neadPool");
         address gauge = gaugeForPool[pool];
         IGauge(gauge).withdraw(amount);
@@ -132,7 +157,11 @@ contract Booster is
         uint len = bribes.length;
         for (uint i; i < len; ++i) {
             uint bal = IERC20Upgradeable(bribes[i]).balanceOf(address(this));
-            if(bal > 0) IERC20Upgradeable(bribes[i]).transfer(feeHandler, bal - unclaimedFees[bribes[i]]);
+            if (bal > 0)
+                IERC20Upgradeable(bribes[i]).transfer(
+                    feeHandler,
+                    bal - unclaimedFees[bribes[i]]
+                );
         }
     }
 
@@ -146,12 +175,13 @@ contract Booster is
 
         uint len = tokens.length;
         for (uint i; i < len; ++i) {
-            uint bal = IERC20Upgradeable(tokens[i]).balanceOf(address(this)) - unclaimedFees[tokens[i]];
+            uint bal = IERC20Upgradeable(tokens[i]).balanceOf(address(this)) -
+                unclaimedFees[tokens[i]];
             if (bal > 0) {
-                uint fee = bal * platformFee / 1e18;
+                uint fee = (bal * platformFee) / 1e18;
                 unclaimedFees[tokens[i]] += fee;
                 IERC20Upgradeable(tokens[i]).transfer(msg.sender, bal - fee);
-            } 
+            }
         }
     }
 

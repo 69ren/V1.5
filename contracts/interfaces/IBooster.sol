@@ -9,4 +9,7 @@ interface IBooster {
     function claimBribes(address pool) external returns (address[] memory bribes);
     function poke(address token) external;
     function setTokenForPool(address pool, address token) external;
+    function gaugeForPool(address pool) external view returns (address gauge);
+    function voter() external view returns (address);
+    function tokenID() external view returns (uint);
 }

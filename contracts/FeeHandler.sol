@@ -29,37 +29,47 @@ contract feeHandler is
 {
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant SETTER_ROLE = keccak256("SETTER_ROLE");
-    uint public platformFee; // initially set to 15%
-    uint treasuryFee; // initially set to 5%
-    uint stakerFee; // initially set to 10%
     address public treasury;
     address public ram;
     address public swapTo;
-    IMultiRewards public neadStake;
-
-    uint bribeCallFee;
-    uint performanceCallFee;
-
     address veDepositor;
+
+    IMultiRewards public neadStake;
     ISwappoor public swap;
     IBooster booster;
+    IVoter voter;
+
+    uint public bribeCallFee;
+    uint public performanceCallFee;
+    uint public platformFee; // initially set to 15%
+    uint treasuryFee; // initially set to 5%
+    uint stakerFee; // initially set to 10%
+    uint tokenID;
+    
+    
+
     mapping(address => bool) isApproved; // check if swapper is approved to spend a token
+    // pool -> bribe
+    mapping(address => address) public bribeForPool;
 
     function initialize(
         address _treasury,
-        ISwappoor _swap
+        ISwappoor _swap,
+        IBooster _booster
     ) external initializer {
         __Pausable_init();
         __AccessControlEnumerable_init();
 
         treasury = _treasury;
         swap = _swap;
+        booster = _booster;
+        voter = IVoter(_booster.voter());
+        tokenID = booster.tokenID();
 
         IERC20Upgradeable(ram).approve(address(swap), type(uint).max);
         isApproved[ram] = true;
         IERC20Upgradeable(veDepositor).approve(address(swap), type(uint).max);
         isApproved[veDepositor] = true;
-
     }
 
     function setRewardsFees(
@@ -73,8 +83,23 @@ contract feeHandler is
         require(treasuryFee + stakerFee == platformFee, "!Total");
     }
 
+    function claimBribes(
+        address pool
+    ) internal returns (address[] memory bribes) {
+        address feeDistributor = bribeForPool[pool];
+        if (feeDistributor == address(0)) {
+            address gauge = voter.gauges(pool);
+            feeDistributor = voter.feeDistributers(gauge);
+            bribeForPool[pool] = feeDistributor;
+        }
+
+        IFeeDistributor feeDist = IFeeDistributor(feeDistributor);
+        bribes = feeDist.getRewardTokens();
+        feeDist.getReward(tokenID, bribes);
+    }
+
     function processBribes(address pool, address to) public {
-        address[] memory tokens = booster.claimBribes(pool);
+        address[] memory tokens = claimBribes(pool);
         uint len = tokens.length;
         uint fee;
         unchecked {
@@ -98,7 +123,11 @@ contract feeHandler is
                         IERC20Upgradeable(tokens[i]).transfer(to, fee);
                         neadStake.notifyRewardAmount(tokens[i], bal);
                     } else {
-                        if(!isApproved[tokens[i]]) IERC20Upgradeable(tokens[i]).approve(address(swap), type(uint).max);
+                        if (!isApproved[tokens[i]])
+                            IERC20Upgradeable(tokens[i]).approve(
+                                address(swap),
+                                type(uint).max
+                            );
                         uint amountOut = swap.swapTokens(
                             tokens[i],
                             swapTo,
@@ -168,7 +197,11 @@ contract feeHandler is
                     stakersShare
                 );
             } else {
-                if(!isApproved[token]) IERC20Upgradeable(token).approve(address(swap), type(uint).max);
+                if (!isApproved[token])
+                    IERC20Upgradeable(token).approve(
+                        address(swap),
+                        type(uint).max
+                    );
                 uint amountOut = swap.swapTokens(token, swapTo, stakersShare);
                 IMultiRewards(neadStake).notifyRewardAmount(swapTo, amountOut);
             }
