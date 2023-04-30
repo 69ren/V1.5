@@ -148,4 +148,6 @@ contract BaseERC20 is Initializable {
     }
 
     function beforeBalanceChange(address account) internal virtual {}
+
+    function afterBalanceChange(address account) internal virtual {}
 }
