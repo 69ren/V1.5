@@ -4,7 +4,7 @@ pragma solidity 0.8.19;
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 /**
- * @notice ERC20 contract for use with ennead rewarder contracts only!
+ * @notice ERC20 contract for use with ennead contracts only!
  * @notice follows the ERC20 standard, based on OpenZeppelin implementation
  */
 
@@ -84,7 +84,7 @@ contract BaseERC20 is Initializable {
     }
 
     function _mint(address to, uint256 amount) internal virtual {
-        unchecked {
+        unchecked { // giga unlikely to overflow in this application (or any tbh). giga
             totalSupply += amount;
             balanceOf[to] += amount;
         }
@@ -150,4 +150,6 @@ contract BaseERC20 is Initializable {
     function beforeBalanceChange(address account) internal virtual {}
 
     function afterBalanceChange(address account) internal virtual {}
+
+    uint[45] private __gap;
 }

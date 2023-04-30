@@ -5,14 +5,11 @@ pragma solidity 0.8.19;
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./Libraries/ERC4626.sol";
 import "./interfaces/IMultiRewards.sol";
 
-contract elmoSOLID is
-    ERC4626Upgradeable,
-    PausableUpgradeable,
-    AccessControlEnumerableUpgradeable
-{
+contract elmoSOLID is ERC4626, PausableUpgradeable, AccessControlEnumerableUpgradeable, UUPSUpgradeable {
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant SETTER_ROLE = keccak256("SETTER_ROLE");
 
@@ -25,7 +22,7 @@ contract elmoSOLID is
         address pauser
     ) public initializer {
         __ERC4626_init(_token);
-        __ERC20_init("elmo", "fff"); //placeholder name
+        ERC20Init("elmo", "fff"); //placeholder name
         __Pausable_init();
         __AccessControlEnumerable_init();
 
@@ -61,13 +58,32 @@ contract elmoSOLID is
         uint256 shares
     ) internal override {
         if (caller != owner) {
-            _spendAllowance(owner, caller, shares);
+            require(allowance[owner][caller] >= shares, "Insufficient allowance");
+            allowance[owner][caller] -= shares;
         }
-
         _burn(owner, shares);
         SafeERC20Upgradeable.safeTransfer(_asset, receiver, assets);
         multi.withdraw(receiver, shares);
         emit Withdraw(caller, receiver, owner, assets, shares);
+    }
+
+    function _transfer(
+        address from,
+        address to,
+        uint256 amount
+    ) internal override {
+        require(amount > 0, "Can't transfer 0!");
+
+        
+        balanceOf[from] -= amount;
+        multi.withdraw(from, amount);
+        
+        unchecked {
+            balanceOf[to] += amount;
+        }
+        multi.deposit(to, amount);
+
+        emit Transfer(from, to, amount);
     }
 
     function setAddresses(address _multi) external onlyRole(SETTER_ROLE) {
@@ -81,4 +97,7 @@ contract elmoSOLID is
     function unpause() external onlyRole(PAUSER_ROLE) {
         _unpause();
     }
+    
+    function _authorizeUpgrade(address newImplementation) internal override{}
+
 }

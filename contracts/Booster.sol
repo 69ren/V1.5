@@ -10,12 +10,9 @@ import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
-contract Booster is
-    Initializable,
-    AccessControlEnumerableUpgradeable,
-    PausableUpgradeable
-{
+contract Booster is Initializable, AccessControlEnumerableUpgradeable, PausableUpgradeable, UUPSUpgradeable {
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant VOTER_ROLE = keccak256("VOTER_ROLE");
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
@@ -23,12 +20,10 @@ contract Booster is
     IVoter public voter;
     IVotingEscrow votingEscrow;
 
-    // Ennead contracts
     address public veDepositor;
     uint public tokenID;
     address public feeHandler;
     address public poolRouter;
-
     address public ram;
 
     uint public platformFee; // mirrored from feeHandler to reduce external calls
@@ -45,7 +40,6 @@ contract Booster is
 
     function initialize(
         IVoter _voter,
-        address _veDepositor,
         address admin,
         address pauser,
         address voterRole,
@@ -62,8 +56,6 @@ contract Booster is
         votingEscrow = IVotingEscrow(voter._ve());
         ram = voter.base();
 
-        veDepositor = _veDepositor;
-        votingEscrow.setApprovalForAll(_veDepositor, true);
     }
 
     function setAddresses(
@@ -72,12 +64,12 @@ contract Booster is
         address _poolRouter
     ) external onlyRole(OPERATOR_ROLE) {
         if (_veDepositor != address(0)) {
-            votingEscrow.setApprovalForAll(veDepositor, false);
+            if(veDepositor != address(0)) votingEscrow.setApprovalForAll(veDepositor, false);
             veDepositor = _veDepositor;
             votingEscrow.setApprovalForAll(veDepositor, true);
         }
         if (_feeHandler != address(0)) {
-            votingEscrow.setApprovalForAll(feeHandler, false);
+            if(feeHandler != address(0)) votingEscrow.setApprovalForAll(feeHandler, false);
             feeHandler = _feeHandler;
             votingEscrow.setApprovalForAll(_feeHandler, true);
         }
@@ -89,6 +81,7 @@ contract Booster is
     function setTokenForPool(address pool, address token) external {
         require(msg.sender == poolRouter);
         tokenForPool[pool] = token;
+        IERC20Upgradeable(pool).approve(token, type(uint).max);
     }
 
     function setFee(uint fee) external {
@@ -116,26 +109,28 @@ contract Booster is
             );
     }
 
+    /**
+        @notice stakes lp tokens in gauge, only pool contracts can call this function
+        @dev does not do transferFrom, it relies on the pool to send the lp tokens beforehand.
+    */
     function depositInGauge(address pool, uint amount) external whenNotPaused {
         require(msg.sender == tokenForPool[pool], "!neadPool");
         address gauge = gaugeForPool[pool];
         if (gauge == address(0)) {
             gauge = voter.gauges(pool);
+            if (gauge == address(0)) {
+                gauge = voter.createGauge(pool);
+            }
             gaugeForPool[pool] = gauge;
             IERC20Upgradeable(pool).approve(gauge, type(uint).max);
         }
-        IERC20Upgradeable(pool).transferFrom(msg.sender, address(this), amount);
         IGauge(gauge).deposit(amount, tokenID);
     }
 
-    function withdrawFromGauge(
-        address pool,
-        uint amount
-    ) external whenNotPaused {
+    function withdrawFromGauge(address pool, uint amount) external whenNotPaused {
         require(msg.sender == tokenForPool[pool], "!neadPool");
         address gauge = gaugeForPool[pool];
         IGauge(gauge).withdraw(amount);
-        IERC20Upgradeable(pool).transfer(msg.sender, amount);
     }
 
     function getRewardFromGauge(
@@ -179,4 +174,6 @@ contract Booster is
     function unpause() external onlyRole(PAUSER_ROLE) {
         _unpause();
     }
+
+    function _authorizeUpgrade(address newImplementation) internal override{}
 }

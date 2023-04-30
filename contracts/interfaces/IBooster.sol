@@ -12,4 +12,6 @@ interface IBooster {
     function gaugeForPool(address pool) external view returns (address gauge);
     function voter() external view returns (address);
     function tokenID() external view returns (uint);
+    function ram() external view returns (address);
+    function veDepositor() external view returns (address);
 }

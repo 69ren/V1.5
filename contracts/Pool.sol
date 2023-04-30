@@ -36,7 +36,8 @@ contract Rewarder is Initializable, BaseERC20 {
         address indexed rewardsToken,
         uint256 reward
     );
-
+    
+    /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
@@ -70,7 +71,7 @@ contract Rewarder is Initializable, BaseERC20 {
         require(amount > 0, "Can't deposit 0!");
 
         _mint(account, amount);
-        IERC20Upgradeable(pool).transferFrom(account, address(this), amount);
+        IERC20Upgradeable(pool).transferFrom(account, booster, amount);
         IBooster(booster).depositInGauge(pool, amount);
     }
 
@@ -83,10 +84,10 @@ contract Rewarder is Initializable, BaseERC20 {
 
         _burn(account, amount);
         IBooster(booster).withdrawFromGauge(pool, amount);
-        IERC20Upgradeable(pool).transfer(account, amount);
+        IERC20Upgradeable(pool).transferFrom(booster, account, amount);
     }
 
-    // @notice earned is an estimation and is not exact until checkpoints have actually been updated.
+    /// @notice earned is an estimation and is not exact until checkpoints have actually been updated.
     function earned(
         address account,
         address[] calldata tokens
@@ -119,13 +120,15 @@ contract Rewarder is Initializable, BaseERC20 {
         return pending;
     }
 
+    /// @dev using unchecked math, highly unlikely to over or underflow
     modifier updateRewards(address account) {
         address[] memory _rewards = rewards;
         uint len = _rewards.length;
         uint total = totalSupply;
         IBooster(booster).getRewardFromGauge(pool, _rewards);
         if (total > 0) {
-            for (uint i; i < len; ) {
+            unchecked {
+                for (uint i; i < len; ++i) {
                 Reward memory _integral = rewardIntegral[_rewards[i]];
                 uint bal = IERC20Upgradeable(_rewards[i]).balanceOf(
                     address(this)
@@ -149,43 +152,42 @@ contract Rewarder is Initializable, BaseERC20 {
                             .integral;
                     }
                 }
-                unchecked {
-                    ++i;
-                }
+            }
             }
         }
         _;
     }
 
+    /// @dev using unchecked math, no possibility for an under or overflow
     function getReward(address account) external updateRewards(account) {
         require(msg.sender == account || msg.sender == poolRouter);
 
         address[] memory _rewards = rewards;
         uint len = _rewards.length;
-        for (uint i; i < len; ) {
+        unchecked {
+            for (uint i; i < len; ++i) {
             uint claims = claimable[account][_rewards[i]];
             rewardIntegral[_rewards[i]].delta -= claims;
             delete claimable[account][_rewards[i]];
-            IERC20Upgradeable(_rewards[i]).transfer(account, claims);
-            emit RewardPaid(account, _rewards[i], claims);
-            unchecked {
-                ++i;
+            if(claims > 0) {
+                IERC20Upgradeable(_rewards[i]).transfer(account, claims);
             }
-        }
+            emit RewardPaid(account, _rewards[i], claims);
+            }
+        }    
     }
 
-    // @notice In case a new reward token is added, to allow distribution to stakers.
+    /// @notice In case a new reward token is added, to allow distribution to stakers.
     function addRewardToken(address token) external {
         require(msg.sender == poolRouter);
-
         if (!isReward[token]) {
             isReward[token] = true;
             rewards.push(token);
         }
     }
 
-    /*
-     *   @notice Remove reward tokens if there haven't been emissions to it in awhile. Saves a lot of gas on interactions.
+    /**
+     *   @notice Remove reward tokens if there haven't been emissions in awhile. Saves a lot of gas on interactions.
      *   @dev Must be very careful when calling this function as users will not be able to claim rewards for the token that was removed.
      *   While there is some security measure in place, the caller must still ensure that all users have claimed rewards before this is called.
      */
@@ -223,4 +225,6 @@ contract Rewarder is Initializable, BaseERC20 {
     function rewardsListLength() external view returns (uint) {
         return rewards.length;
     }
+
+    
 }

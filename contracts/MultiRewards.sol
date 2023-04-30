@@ -7,9 +7,11 @@ import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 
-contract multiRewards is Initializable, AccessControlEnumerableUpgradeable, PausableUpgradeable, ReentrancyGuardUpgradeable {
+
+contract multiRewards is Initializable, AccessControlEnumerableUpgradeable, PausableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
     
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant NOTIFIER_ROLE = keccak256("OPERATOR_ROLE");
@@ -197,4 +199,6 @@ contract multiRewards is Initializable, AccessControlEnumerableUpgradeable, Paus
         require(msg.sender == elmo, "!elmo");
         _;
     }
+
+    function _authorizeUpgrade(address newImplementation) internal override{}
 }

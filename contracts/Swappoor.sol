@@ -10,12 +10,14 @@ import "@openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgrad
 import "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+
 
 
 
 // Swaps bribe/fee tokens to weth. Loosely based on Tarot optiswap. All swaps are made through ramses.
 // it is now also a rudimentary zapper XD
-contract bribeSwappoor is Initializable, AccessControlEnumerableUpgradeable {
+contract bribeSwappoor is Initializable, AccessControlEnumerableUpgradeable, UUPSUpgradeable {
     
     bytes32 public constant SETTER_ROLE = keccak256("SETTER_ROLE");
     // Setting all these as constants because they are unlikely to change
@@ -328,4 +330,5 @@ contract bribeSwappoor is Initializable, AccessControlEnumerableUpgradeable {
         }
     }
 
+    function _authorizeUpgrade(address newImplementation) internal override{}
 }

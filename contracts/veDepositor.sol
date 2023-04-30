@@ -10,12 +10,15 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+
 
 contract VeDepositor is
     Initializable,
     BaseERC20,
     PausableUpgradeable,
-    AccessControlEnumerableUpgradeable
+    AccessControlEnumerableUpgradeable,
+    UUPSUpgradeable
 {
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant SETTER_ROLE = keccak256("SETTER_ROLE");
@@ -26,7 +29,7 @@ contract VeDepositor is
     IRewardsDistributor public veDistributor;
 
     // Ennead contracts
-    address public lpDepositor;
+    address public booster;
     address public neadStake;
     uint256 public tokenID;
     uint256 public unlockTime;
@@ -67,10 +70,10 @@ contract VeDepositor is
     }
 
     function setAddresses(
-        address _lpDepositor,
+        address _booster,
         address _neadStake
     ) external onlyRole(SETTER_ROLE) {
-        lpDepositor = _lpDepositor;
+        booster = _booster;
         allowance[address(this)][_neadStake] = type(uint).max;
     }
 
@@ -100,7 +103,7 @@ contract VeDepositor is
         if (tokenID == 0) {
             tokenID = _tokenID;
             unlockTime = end;
-            votingEscrow.safeTransferFrom(address(this), lpDepositor, _tokenID);
+            votingEscrow.safeTransferFrom(address(this), booster, _tokenID);
         } else {
             votingEscrow.merge(_tokenID, tokenID);
             if (end > unlockTime) unlockTime = end;
@@ -184,4 +187,6 @@ contract VeDepositor is
 
         return true;
     }
+
+    function _authorizeUpgrade(address newImplementation) internal override{}
 }

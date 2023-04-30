@@ -14,6 +14,8 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+
 
 /**
     @notice contract that stores platform performance fees and handles bribe distribution
@@ -25,7 +27,8 @@ import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 contract feeHandler is
     Initializable,
     AccessControlEnumerableUpgradeable,
-    PausableUpgradeable
+    PausableUpgradeable,
+    UUPSUpgradeable
 {
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant SETTER_ROLE = keccak256("SETTER_ROLE");
@@ -65,6 +68,8 @@ contract feeHandler is
         booster = _booster;
         voter = IVoter(_booster.voter());
         tokenID = booster.tokenID();
+        ram = _booster.ram();
+        veDepositor = _booster.veDepositor();
 
         IERC20Upgradeable(ram).approve(address(swap), type(uint).max);
         isApproved[ram] = true;
@@ -98,6 +103,7 @@ contract feeHandler is
         feeDist.getReward(tokenID, bribes);
     }
 
+    /// @notice swaps bribes to weth, or locks to neadRam if the reward token is ram and notifies multiRewards
     function processBribes(address pool, address to) public {
         address[] memory tokens = claimBribes(pool);
         uint len = tokens.length;
@@ -142,6 +148,7 @@ contract feeHandler is
         }
     }
 
+    /// @notice processes multiple bribes
     function batchProcessBribes(address[] calldata pools, address to) external {
         uint len = pools.length;
         for (uint i; i < len; ) {
@@ -152,6 +159,7 @@ contract feeHandler is
         }
     }
 
+    /// @notice swaps/locks performance fees and sends to multiRewards
     function processPerformanceFees(address token, address to) public {
         booster.poke(token);
         IERC20Upgradeable _token = IERC20Upgradeable(token);
@@ -220,4 +228,6 @@ contract feeHandler is
             }
         }
     }
+    
+    function _authorizeUpgrade(address newImplementation) internal override{}
 }
