@@ -1,14 +1,22 @@
-import { ethers, network, upgrades } from "hardhat";
-import { Booster, BribeSwappoor, ElmoSOLID, EnneadProxyDeployer, FeeHandler, MultiRewards, PoolRouter, VeDepositor } from "../typechain-types";
+import { ethers, upgrades } from "hardhat";
+import { Booster, BribeSwappoor, ElmoSOLID, EnneadProxyDeployer, FeeHandler, MultiRewards, PoolRouter, Rewarder, VeDepositor } from "../typechain-types";
+import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 
-const MULTISIG = "0xE0474827e6Ec1953300f4eFaB36Bcfd535FB7E44"
-const _voter = "0xAAA2564DEb34763E3d05162ed3f5C2658691f499"
-const ram = "0xAAA6C1E32C55A7Bfa8066A6FAE9b42650F262418"
-const votingEscrow = "0xAAA343032aA79eE9a6897Dab03bef967c3289a06"
-const veDist = "0xAAA86B908A3B500A0DE661301ea63966923a97b1"
-const salts = [1,2,3,4,5,6,7]
+export type Ennead = {
+    deployer: SignerWithAddress,
+    enneadDeployer: EnneadProxyDeployer,
+    booster: Booster,
+    ve: VeDepositor,
+    router: PoolRouter,
+    swap: BribeSwappoor,
+    rewards: MultiRewards,
+    fees: FeeHandler,
+    tokenStaking: ElmoSOLID,
+    pool: Rewarder,
+    proxyAdminAddress: string
+}
 
-async function deploy() {
+export async function deploy(config: any) {
     const [
         EnneadDeployer,
         Booster,
@@ -34,8 +42,7 @@ async function deploy() {
 
     const proxyAdminAddress = await upgrades.deployProxyAdmin();
     const enneadDeployer = (await upgrades.deployProxy(EnneadDeployer, [proxyAdminAddress, deployer.address, deployer.address])) as EnneadProxyDeployer
-
-    await enneadDeployer.deployMany(salts)
+    await enneadDeployer.deployMany(config.salts)
     const proxies = await enneadDeployer.getDeployedProxies()
 
     const factories = {Booster, veDepositor, PoolRouter, Swappoor, MultiRewards, FeeHandler, elmo}
@@ -57,22 +64,31 @@ async function deploy() {
     const rewards = MultiRewards.attach(proxies[4]) as MultiRewards
     const fees = FeeHandler.attach(proxies[5]) as FeeHandler
     const tokenStaking = elmo.attach(proxies[6]) as ElmoSOLID
-    const pool = await upgrades.deployBeacon(Pool)
+    const pool = await upgrades.deployBeacon(Pool) as Rewarder
 
-    await booster.initialize(_voter, deployer.address, deployer.address, deployer.address, deployer.address)
+    await booster.initialize(config.voter, config.MULTISIG, config.operator, config.operator, config.operator, proxyAdminAddress)
     await booster.setAddresses(ve.address, fees.address, router.address)
-    await ve.initialize(ram, votingEscrow, veDist, deployer.address, deployer.address, deployer.address)
+    await ve.initialize(config.ram, config.votingEscrow, config.veDist, config.MULTISIG, config.operator, config.operator, proxyAdminAddress)
     await ve.setAddresses(booster.address, tokenStaking.address)
-    await swap.initialize(deployer.address)
-    await rewards.initialize(tokenStaking.address, deployer.address, deployer.address, deployer.address)
-    await fees.initialize(deployer.address, swap.address, booster.address)
-    await tokenStaking.initialize(ve.address, deployer.address, deployer.address, deployer.address)
-    await router.initialize(pool.address,booster.address)
+    await swap.initialize(config.MULTISIG, config.operator, proxyAdminAddress)
+    await rewards.initialize(tokenStaking.address, config.MULTISIG, config.operator, fees.address, proxyAdminAddress)
+    await fees.initialize(config.MULTISIG, config.operator, config.operator, proxyAdminAddress, swap.address, booster.address)
+    await tokenStaking.initialize(ve.address, config.MULTISIG, config.operator, config.operator, proxyAdminAddress)
+    await router.initialize(pool.address, booster.address, config.MULTISIG, config.operator, config.operator, proxyAdminAddress)
     
     console.log('Done')
-}
 
-deploy().catch((error) => {
-    console.error(error);
-    process.exitCode = 1;
-  });
+    return {
+        deployer,
+        enneadDeployer,
+        booster,
+        ve,
+        router,
+        swap,
+        rewards,
+        fees,
+        tokenStaking,
+        pool,
+        proxyAdminAddress
+    }
+}
