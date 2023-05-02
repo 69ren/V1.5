@@ -5,7 +5,6 @@ pragma solidity 0.8.19;
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import "./Libraries/ERC20.sol";
-import "./interfaces/Ramses/IGauge.sol";
 import "./interfaces/IBooster.sol";
 
 contract Rewarder is Initializable, BaseERC20 {
@@ -25,10 +24,10 @@ contract Rewarder is Initializable, BaseERC20 {
     address[] public rewards;
     mapping(address => bool) isReward;
 
-    address poolRouter;
+    
     address booster;
+    address poolRouter;
     address pool;
-    address gauge;
 
     // events
     event RewardPaid(
@@ -36,7 +35,7 @@ contract Rewarder is Initializable, BaseERC20 {
         address indexed rewardsToken,
         uint256 reward
     );
-    
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -56,9 +55,11 @@ contract Rewarder is Initializable, BaseERC20 {
         poolRouter = _poolRouter;
         booster = _booster;
         IERC20Upgradeable(pool).approve(booster, type(uint).max);
-        
+
         string memory _symbol = BaseERC20(pool).symbol();
-        string memory _name = string(abi.encodePacked("Ennead ", _symbol, " Deposit"));
+        string memory _name = string(
+            abi.encodePacked("Ennead ", _symbol, " Deposit")
+        );
         _symbol = string(abi.encodePacked("nead-", _symbol));
         ERC20Init(_name, _symbol);
     }
@@ -71,7 +72,11 @@ contract Rewarder is Initializable, BaseERC20 {
         require(amount > 0, "Can't deposit 0!");
 
         _mint(account, amount);
-        IERC20Upgradeable(pool).transferFrom(account, booster, amount);
+        if (msg.sender == account) {
+            IERC20Upgradeable(pool).transferFrom(account, booster, amount);
+        } else {
+            IERC20Upgradeable(pool).transferFrom(poolRouter, booster, amount);
+        }
         IBooster(booster).depositInGauge(pool, amount);
     }
 
@@ -103,8 +108,8 @@ contract Rewarder is Initializable, BaseERC20 {
                 uint integral = rewardIntegral[tokens[i]].integral;
 
                 if (totalSupply > 0) {
-                    uint256 delta = IGauge(gauge).earned(tokens[i], account);
-                    delta -= (delta * 15) / 100;
+                    uint256 delta = IBooster(booster).earned(pool,tokens[i]);
+                    //delta -= (delta * 15) / 100;
                     integral += (1e18 * delta) / _totalSupply;
                 }
 
@@ -126,19 +131,20 @@ contract Rewarder is Initializable, BaseERC20 {
         uint len = _rewards.length;
         uint total = totalSupply;
         IBooster(booster).getRewardFromGauge(pool, _rewards);
-        if (total > 0) {
-            unchecked {
-                for (uint i; i < len; ++i) {
+        unchecked {
+            for (uint i; i < len; ++i) {
                 Reward memory _integral = rewardIntegral[_rewards[i]];
-                uint bal = IERC20Upgradeable(_rewards[i]).balanceOf(
-                    address(this)
-                );
-                uint _delta = bal - _integral.delta;
+                if (total > 0) {
+                    uint bal = IERC20Upgradeable(_rewards[i]).balanceOf(
+                        address(this)
+                    );
+                    uint _delta = bal - _integral.delta;
 
-                if (_delta > 0) {
-                    _integral.integral += (1e18 * _delta) / total;
-                    _integral.delta = bal;
-                    rewardIntegral[_rewards[i]] = _integral;
+                    if (_delta > 0) {
+                        _integral.integral += (1e18 * _delta) / total;
+                        _integral.delta = bal;
+                        rewardIntegral[_rewards[i]] = _integral;
+                    }
                 }
 
                 if (account != address(0)) {
@@ -153,7 +159,6 @@ contract Rewarder is Initializable, BaseERC20 {
                     }
                 }
             }
-            }
         }
         _;
     }
@@ -166,15 +171,15 @@ contract Rewarder is Initializable, BaseERC20 {
         uint len = _rewards.length;
         unchecked {
             for (uint i; i < len; ++i) {
-            uint claims = claimable[account][_rewards[i]];
-            rewardIntegral[_rewards[i]].delta -= claims;
-            delete claimable[account][_rewards[i]];
-            if(claims > 0) {
-                IERC20Upgradeable(_rewards[i]).transfer(account, claims);
+                uint claims = claimable[account][_rewards[i]];
+                rewardIntegral[_rewards[i]].delta -= claims;
+                delete claimable[account][_rewards[i]];
+                if (claims > 0) {
+                    IERC20Upgradeable(_rewards[i]).transfer(account, claims);
+                }
+                emit RewardPaid(account, _rewards[i], claims);
             }
-            emit RewardPaid(account, _rewards[i], claims);
-            }
-        }    
+        }
     }
 
     /// @notice In case a new reward token is added, to allow distribution to stakers.
@@ -225,6 +230,4 @@ contract Rewarder is Initializable, BaseERC20 {
     function rewardsListLength() external view returns (uint) {
         return rewards.length;
     }
-
-    
 }

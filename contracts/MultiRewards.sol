@@ -15,10 +15,15 @@ contract multiRewards is Initializable, AccessControlEnumerableUpgradeable, Paus
     
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant NOTIFIER_ROLE = keccak256("OPERATOR_ROLE");
+    bytes32 public constant PROXY_ADMIN_ROLE = keccak256("PROXY_ADMIN");
 
     address public elmo;
+    address public proxyAdmin;
+    address[] public rewards;
+
     uint256 internal constant DURATION = 7 days;
     uint256 internal constant PRECISION = 10 ** 18;
+    uint256 public totalSupply;
 
     struct Reward {
         uint rewardRate;
@@ -26,15 +31,11 @@ contract multiRewards is Initializable, AccessControlEnumerableUpgradeable, Paus
         uint lastUpdateTime;
         uint rewardPerTokenStored;
     }
-    mapping(address => Reward) public rewardData;
 
+    mapping(address => Reward) public rewardData;
     mapping(address => mapping(address => uint256)) public storedRewardsPerUser;
     mapping(address => mapping(address => uint256)) public userRewardPerTokenStored;
-
-    uint256 public totalSupply;
     mapping(address => uint256) public balanceOf;
-
-    address[] public rewards;
     mapping(address => bool) public isReward;
 
     event Deposit(address indexed from, uint amount);
@@ -50,7 +51,7 @@ contract multiRewards is Initializable, AccessControlEnumerableUpgradeable, Paus
         uint256 amount
     );
 
-    function initialize(address _elmo, address admin, address pauser, address notifier) external initializer {
+    function initialize(address _elmo, address admin, address pauser, address notifier, address _proxyAdmin) external initializer {
         __ReentrancyGuard_init();
         __Pausable_init();
         __AccessControlEnumerable_init();
@@ -60,6 +61,9 @@ contract multiRewards is Initializable, AccessControlEnumerableUpgradeable, Paus
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(PAUSER_ROLE, pauser);
         _grantRole(NOTIFIER_ROLE, notifier);
+        _grantRole(PROXY_ADMIN_ROLE, _proxyAdmin);
+        _setRoleAdmin(PROXY_ADMIN_ROLE, PROXY_ADMIN_ROLE);
+        proxyAdmin = _proxyAdmin;
         
     }
 
@@ -195,10 +199,12 @@ contract multiRewards is Initializable, AccessControlEnumerableUpgradeable, Paus
         _;
     }
 
-    modifier onlyElmo() {
-        require(msg.sender == elmo, "!elmo");
-        _;
-    }
+    function _authorizeUpgrade(address newImplementation) internal override onlyRole(PROXY_ADMIN_ROLE) {}
 
-    function _authorizeUpgrade(address newImplementation) internal override{}
+    /// @dev grantRole already checks role, so no more additional checks are necessary
+    function changeAdmin(address newAdmin) external {
+        grantRole(PROXY_ADMIN_ROLE, newAdmin);
+        renounceRole(PROXY_ADMIN_ROLE, proxyAdmin);
+        proxyAdmin = newAdmin;
+    }
 }

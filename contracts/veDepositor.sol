@@ -12,7 +12,6 @@ import "@openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgrad
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
-
 contract VeDepositor is
     Initializable,
     BaseERC20,
@@ -23,17 +22,18 @@ contract VeDepositor is
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant SETTER_ROLE = keccak256("SETTER_ROLE");
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
+    bytes32 public constant PROXY_ADMIN_ROLE = keccak256("PROXY_ADMIN");
 
     IERC20Upgradeable public token;
     IVotingEscrow public votingEscrow;
     IRewardsDistributor public veDistributor;
 
-    // Ennead contracts
     address public booster;
     address public neadStake;
+    address public proxyAdmin;
+
     uint256 public tokenID;
     uint256 public unlockTime;
-
     uint256 public constant WEEK = 1 weeks;
     uint256 public constant MAX_LOCK_TIME = 4 * 365 * 86400;
 
@@ -51,7 +51,8 @@ contract VeDepositor is
         IRewardsDistributor _veDist,
         address admin,
         address pauser,
-        address setter
+        address setter,
+        address _proxyAdmin
     ) public initializer {
         __Pausable_init();
         __AccessControlEnumerable_init();
@@ -67,6 +68,9 @@ contract VeDepositor is
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(PAUSER_ROLE, pauser);
         _grantRole(SETTER_ROLE, setter);
+        _grantRole(PROXY_ADMIN_ROLE, _proxyAdmin);
+        _setRoleAdmin(PROXY_ADMIN_ROLE, PROXY_ADMIN_ROLE);
+        proxyAdmin = _proxyAdmin;
     }
 
     function setAddresses(
@@ -188,5 +192,14 @@ contract VeDepositor is
         return true;
     }
 
-    function _authorizeUpgrade(address newImplementation) internal override{}
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyRole(PROXY_ADMIN_ROLE) {}
+
+    /// @dev grantRole already checks role, so no more additional checks are necessary
+    function changeAdmin(address newAdmin) external {
+        grantRole(PROXY_ADMIN_ROLE, newAdmin);
+        renounceRole(PROXY_ADMIN_ROLE, proxyAdmin);
+        proxyAdmin = newAdmin;
+    }
 }

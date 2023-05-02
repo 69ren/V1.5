@@ -14,4 +14,5 @@ interface IBooster {
     function tokenID() external view returns (uint);
     function ram() external view returns (address);
     function veDepositor() external view returns (address);
+    function earned(address pool, address token) external view returns (uint rewards);
 }

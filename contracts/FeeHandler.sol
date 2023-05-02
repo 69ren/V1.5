@@ -32,10 +32,13 @@ contract feeHandler is
 {
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant SETTER_ROLE = keccak256("SETTER_ROLE");
+    bytes32 public constant PROXY_ADMIN_ROLE = keccak256("PROXY_ADMIN");
+
     address public treasury;
     address public ram;
     address public swapTo;
     address veDepositor;
+    address public proxyAdmin;
 
     IMultiRewards public neadStake;
     ISwappoor public swap;
@@ -57,11 +60,21 @@ contract feeHandler is
 
     function initialize(
         address _treasury,
+        address pauser,
+        address setter,
+        address _proxyAdmin,
         ISwappoor _swap,
         IBooster _booster
     ) external initializer {
         __Pausable_init();
         __AccessControlEnumerable_init();
+        _grantRole(DEFAULT_ADMIN_ROLE, _treasury);
+        _grantRole(PAUSER_ROLE, pauser);
+        _grantRole(SETTER_ROLE, setter);
+        _grantRole(PROXY_ADMIN_ROLE, _proxyAdmin);
+        _setRoleAdmin(PROXY_ADMIN_ROLE, PROXY_ADMIN_ROLE);
+        proxyAdmin = _proxyAdmin;
+
 
         treasury = _treasury;
         swap = _swap;
@@ -229,5 +242,12 @@ contract feeHandler is
         }
     }
     
-    function _authorizeUpgrade(address newImplementation) internal override{}
+    function _authorizeUpgrade(address newImplementation) internal override onlyRole(PROXY_ADMIN_ROLE) {}
+
+    /// @dev grantRole already checks role, so no more additional checks are necessary
+    function changeAdmin(address newAdmin) external {
+        grantRole(PROXY_ADMIN_ROLE, newAdmin);
+        renounceRole(PROXY_ADMIN_ROLE, proxyAdmin);
+        proxyAdmin = newAdmin;
+    }
 }

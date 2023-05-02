@@ -12,27 +12,34 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
-contract Booster is Initializable, AccessControlEnumerableUpgradeable, PausableUpgradeable, UUPSUpgradeable {
+contract Booster is
+    Initializable,
+    AccessControlEnumerableUpgradeable,
+    PausableUpgradeable,
+    UUPSUpgradeable
+{
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant VOTER_ROLE = keccak256("VOTER_ROLE");
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
+    bytes32 public constant PROXY_ADMIN_ROLE = keccak256("PROXY_ADMIN");
 
     IVoter public voter;
     IVotingEscrow votingEscrow;
 
     address public veDepositor;
-    uint public tokenID;
     address public feeHandler;
     address public poolRouter;
     address public ram;
 
+    uint public tokenID;
     uint public platformFee; // mirrored from feeHandler to reduce external calls
+    mapping(address => uint) public unclaimedFees;
     // pool -> gauge
     mapping(address => address) public gaugeForPool;
     // pool -> token
     mapping(address => address) public tokenForPool; // mirrored from poolRouter to save on external calls
 
-    mapping(address => uint) public unclaimedFees;
+    address public proxyAdmin;
 
     constructor() {
         _disableInitializers();
@@ -43,7 +50,8 @@ contract Booster is Initializable, AccessControlEnumerableUpgradeable, PausableU
         address admin,
         address pauser,
         address voterRole,
-        address operator
+        address operator,
+        address _proxyAdmin
     ) public initializer {
         __Pausable_init();
         __AccessControlEnumerable_init();
@@ -51,11 +59,13 @@ contract Booster is Initializable, AccessControlEnumerableUpgradeable, PausableU
         _grantRole(PAUSER_ROLE, pauser);
         _grantRole(VOTER_ROLE, voterRole);
         _grantRole(OPERATOR_ROLE, operator);
+        _grantRole(PROXY_ADMIN_ROLE, _proxyAdmin);
+        _setRoleAdmin(PROXY_ADMIN_ROLE, PROXY_ADMIN_ROLE);
+        proxyAdmin = _proxyAdmin;
 
         voter = _voter;
         votingEscrow = IVotingEscrow(voter._ve());
         ram = voter.base();
-
     }
 
     function setAddresses(
@@ -64,12 +74,14 @@ contract Booster is Initializable, AccessControlEnumerableUpgradeable, PausableU
         address _poolRouter
     ) external onlyRole(OPERATOR_ROLE) {
         if (_veDepositor != address(0)) {
-            if(veDepositor != address(0)) votingEscrow.setApprovalForAll(veDepositor, false);
+            if (veDepositor != address(0))
+                votingEscrow.setApprovalForAll(veDepositor, false);
             veDepositor = _veDepositor;
             votingEscrow.setApprovalForAll(veDepositor, true);
         }
         if (_feeHandler != address(0)) {
-            if(feeHandler != address(0)) votingEscrow.setApprovalForAll(feeHandler, false);
+            if (feeHandler != address(0))
+                votingEscrow.setApprovalForAll(feeHandler, false);
             feeHandler = _feeHandler;
             votingEscrow.setApprovalForAll(_feeHandler, true);
         }
@@ -82,6 +94,15 @@ contract Booster is Initializable, AccessControlEnumerableUpgradeable, PausableU
         require(msg.sender == poolRouter);
         tokenForPool[pool] = token;
         IERC20Upgradeable(pool).approve(token, type(uint).max);
+        address gauge = gaugeForPool[pool];
+        if (gauge == address(0)) {
+            gauge = voter.gauges(pool);
+            if (gauge == address(0)) {
+                gauge = voter.createGauge(pool);
+            }
+            gaugeForPool[pool] = gauge;
+            IERC20Upgradeable(pool).approve(gauge, type(uint).max);
+        }
     }
 
     function setFee(uint fee) external {
@@ -115,19 +136,15 @@ contract Booster is Initializable, AccessControlEnumerableUpgradeable, PausableU
     */
     function depositInGauge(address pool, uint amount) external whenNotPaused {
         require(msg.sender == tokenForPool[pool], "!neadPool");
+        
         address gauge = gaugeForPool[pool];
-        if (gauge == address(0)) {
-            gauge = voter.gauges(pool);
-            if (gauge == address(0)) {
-                gauge = voter.createGauge(pool);
-            }
-            gaugeForPool[pool] = gauge;
-            IERC20Upgradeable(pool).approve(gauge, type(uint).max);
-        }
         IGauge(gauge).deposit(amount, tokenID);
     }
 
-    function withdrawFromGauge(address pool, uint amount) external whenNotPaused {
+    function withdrawFromGauge(
+        address pool,
+        uint amount
+    ) external whenNotPaused {
         require(msg.sender == tokenForPool[pool], "!neadPool");
         address gauge = gaugeForPool[pool];
         IGauge(gauge).withdraw(amount);
@@ -153,6 +170,11 @@ contract Booster is Initializable, AccessControlEnumerableUpgradeable, PausableU
         }
     }
 
+    function earned(address pool, address token) external view returns (uint rewards) {
+        address gauge = gaugeForPool[pool];
+        rewards = IGauge(gauge).earned(token, address(this));
+    }
+
     function poke(address token) external {
         require(msg.sender == feeHandler);
         uint amount = unclaimedFees[token];
@@ -175,5 +197,14 @@ contract Booster is Initializable, AccessControlEnumerableUpgradeable, PausableU
         _unpause();
     }
 
-    function _authorizeUpgrade(address newImplementation) internal override{}
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyRole(PROXY_ADMIN_ROLE) {}
+
+    /// @dev grantRole already checks role, so no more additional checks are necessary
+    function changeAdmin(address newAdmin) external {
+        grantRole(PROXY_ADMIN_ROLE, newAdmin);
+        renounceRole(PROXY_ADMIN_ROLE, proxyAdmin);
+        proxyAdmin = newAdmin;
+    }
 }
