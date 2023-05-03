@@ -16,7 +16,6 @@ import "@openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgrad
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
-
 /**
     @notice contract that stores platform performance fees and handles bribe distribution
     @notice a callFee is set to incentivize bots to process performance fees / bribes instead of letting lp's shoulder the cost
@@ -51,8 +50,6 @@ contract feeHandler is
     uint treasuryFee; // initially set to 5%
     uint stakerFee; // initially set to 10%
     uint tokenID;
-    
-    
 
     mapping(address => bool) isApproved; // check if swapper is approved to spend a token
     // pool -> bribe
@@ -64,7 +61,8 @@ contract feeHandler is
         address setter,
         address _proxyAdmin,
         ISwappoor _swap,
-        IBooster _booster
+        IBooster _booster,
+        IMultiRewards _neadStake
     ) external initializer {
         __Pausable_init();
         __AccessControlEnumerable_init();
@@ -75,7 +73,6 @@ contract feeHandler is
         _setRoleAdmin(PROXY_ADMIN_ROLE, PROXY_ADMIN_ROLE);
         proxyAdmin = _proxyAdmin;
 
-
         treasury = _treasury;
         swap = _swap;
         booster = _booster;
@@ -83,11 +80,37 @@ contract feeHandler is
         tokenID = booster.tokenID();
         ram = _booster.ram();
         veDepositor = _booster.veDepositor();
+        neadStake = _neadStake;
+        swapTo = swap.weth();
+        IERC20Upgradeable(swapTo).approve(address(_neadStake), type(uint).max);
 
         IERC20Upgradeable(ram).approve(address(swap), type(uint).max);
+        IERC20Upgradeable(ram).approve(veDepositor, type(uint).max);
         isApproved[ram] = true;
         IERC20Upgradeable(veDepositor).approve(address(swap), type(uint).max);
+        IERC20Upgradeable(veDepositor).approve(
+            address(neadStake),
+            type(uint).max
+        );
         isApproved[veDepositor] = true;
+    }
+
+    /// @notice syncs tokenId for booster, needed to make this contract function correctly
+    function syncTokenId() external {
+        tokenID = booster.tokenID();
+    }
+
+    function setSwapTo(address _swapTo) external onlyRole(SETTER_ROLE) {
+        swapTo = _swapTo;
+        IERC20Upgradeable(_swapTo).approve(address(neadStake), type(uint).max);
+    }
+
+    function setCallFees(
+        uint _bribeCallFee,
+        uint _performanceCallFee
+    ) external onlyRole(SETTER_ROLE) {
+        bribeCallFee = _bribeCallFee;
+        performanceCallFee = _performanceCallFee;
     }
 
     function setRewardsFees(
@@ -99,18 +122,18 @@ contract feeHandler is
         treasuryFee = _treasuryFee;
         stakerFee = _stakersFee;
         require(treasuryFee + stakerFee == platformFee, "!Total");
+        booster.setFee(_platformFee);
     }
 
     function claimBribes(
         address pool
-    ) internal returns (address[] memory bribes) {
+    ) public returns (address[] memory bribes) {
         address feeDistributor = bribeForPool[pool];
         if (feeDistributor == address(0)) {
             address gauge = voter.gauges(pool);
             feeDistributor = voter.feeDistributers(gauge);
             bribeForPool[pool] = feeDistributor;
         }
-
         IFeeDistributor feeDist = IFeeDistributor(feeDistributor);
         bribes = feeDist.getRewardTokens();
         feeDist.getReward(tokenID, bribes);
@@ -126,21 +149,19 @@ contract feeHandler is
                 uint bal = IERC20Upgradeable(tokens[i]).balanceOf(
                     address(this)
                 );
+
                 if (bal > 0) {
                     fee = (bal * bribeCallFee) / 1e18;
                     if (tokens[i] == ram) {
                         IERC20Upgradeable(tokens[i]).transfer(to, fee);
                         IVeDepositor(veDepositor).depositTokens(bal - fee);
-                        IERC20Upgradeable(veDepositor).transfer(
-                            address(neadStake),
-                            bal - fee
-                        );
+                        neadStake.notifyRewardAmount(veDepositor, bal - fee);
                     } else if (tokens[i] == veDepositor) {
                         IERC20Upgradeable(tokens[i]).transfer(to, fee);
                         neadStake.notifyRewardAmount(tokens[i], bal - fee);
                     } else if (tokens[i] == swapTo) {
                         IERC20Upgradeable(tokens[i]).transfer(to, fee);
-                        neadStake.notifyRewardAmount(tokens[i], bal);
+                        neadStake.notifyRewardAmount(tokens[i], bal - fee);
                     } else {
                         if (!isApproved[tokens[i]])
                             IERC20Upgradeable(tokens[i]).approve(
@@ -153,8 +174,8 @@ contract feeHandler is
                             bal
                         );
                         fee = (amountOut * bribeCallFee) / 1e18;
-                        IERC20Upgradeable(tokens[i]).transfer(to, fee);
-                        neadStake.notifyRewardAmount(swapTo, amountOut);
+                        IERC20Upgradeable(swapTo).transfer(to, fee);
+                        neadStake.notifyRewardAmount(swapTo, amountOut - fee);
                     }
                 }
             }
@@ -163,8 +184,7 @@ contract feeHandler is
 
     /// @notice processes multiple bribes
     function batchProcessBribes(address[] calldata pools, address to) external {
-        uint len = pools.length;
-        for (uint i; i < len; ) {
+        for (uint i; i < pools.length; ) {
             processBribes(pools[i], to);
             unchecked {
                 ++i;
@@ -195,34 +215,17 @@ contract feeHandler is
             if (token == ram) {
                 bool state = swap.priceOutOfSync();
                 if (state) {
-                    uint amountOut = swap.swapTokens(
-                        ram,
-                        veDepositor,
-                        stakersShare
-                    );
-                    IMultiRewards(neadStake).notifyRewardAmount(
-                        veDepositor,
-                        amountOut
-                    );
+                    uint amountOut = swap.swapTokens(ram, veDepositor, stakersShare);
+                    IMultiRewards(neadStake).notifyRewardAmount(veDepositor, amountOut);
                 } else {
                     IVeDepositor(veDepositor).depositTokens(stakersShare);
                     // neadRam is minted in a 1:1 ratio
-                    IMultiRewards(neadStake).notifyRewardAmount(
-                        veDepositor,
-                        stakersShare
-                    );
+                    IMultiRewards(neadStake).notifyRewardAmount(veDepositor, stakersShare);
                 }
             } else if (token == veDepositor) {
-                IMultiRewards(neadStake).notifyRewardAmount(
-                    veDepositor,
-                    stakersShare
-                );
+                IMultiRewards(neadStake).notifyRewardAmount(veDepositor, stakersShare);
             } else {
-                if (!isApproved[token])
-                    IERC20Upgradeable(token).approve(
-                        address(swap),
-                        type(uint).max
-                    );
+                if (!isApproved[token]) IERC20Upgradeable(token).approve(address(swap),type(uint).max);
                 uint amountOut = swap.swapTokens(token, swapTo, stakersShare);
                 IMultiRewards(neadStake).notifyRewardAmount(swapTo, amountOut);
             }
@@ -233,16 +236,17 @@ contract feeHandler is
         address[] calldata tokens,
         address to
     ) external {
-        uint len = tokens.length;
-        for (uint i; i < len; ) {
+        for (uint i; i < tokens.length; ) {
             processPerformanceFees(tokens[i], to);
             unchecked {
                 ++i;
             }
         }
     }
-    
-    function _authorizeUpgrade(address newImplementation) internal override onlyRole(PROXY_ADMIN_ROLE) {}
+
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyRole(PROXY_ADMIN_ROLE) {}
 
     /// @dev grantRole already checks role, so no more additional checks are necessary
     function changeAdmin(address newAdmin) external {

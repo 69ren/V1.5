@@ -8,6 +8,7 @@ import "@openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgrad
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./Libraries/ERC4626.sol";
 import "./interfaces/IMultiRewards.sol";
+import "hardhat/console.sol";
 
 contract elmoSOLID is ERC4626, PausableUpgradeable, AccessControlEnumerableUpgradeable, UUPSUpgradeable {
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
@@ -19,6 +20,7 @@ contract elmoSOLID is ERC4626, PausableUpgradeable, AccessControlEnumerableUpgra
 
     function initialize(
         IERC20Upgradeable _token,
+        IMultiRewards _multi,
         address admin,
         address setter,
         address pauser,
@@ -35,8 +37,8 @@ contract elmoSOLID is ERC4626, PausableUpgradeable, AccessControlEnumerableUpgra
         _grantRole(PROXY_ADMIN_ROLE, _proxyAdmin);
         _setRoleAdmin(PROXY_ADMIN_ROLE, PROXY_ADMIN_ROLE);
         proxyAdmin = _proxyAdmin;
+        multi = _multi;
 
-        _pause();
     }
 
     function _deposit(
@@ -45,12 +47,7 @@ contract elmoSOLID is ERC4626, PausableUpgradeable, AccessControlEnumerableUpgra
         uint256 assets,
         uint256 shares
     ) internal override {
-        SafeERC20Upgradeable.safeTransferFrom(
-            _asset,
-            caller,
-            address(this),
-            assets
-        );
+        _asset.transferFrom(caller, address(this), assets);
         _mint(receiver, shares);
         multi.deposit(receiver, shares);
         emit Deposit(caller, receiver, assets, shares);
@@ -68,7 +65,7 @@ contract elmoSOLID is ERC4626, PausableUpgradeable, AccessControlEnumerableUpgra
             allowance[owner][caller] -= shares;
         }
         _burn(owner, shares);
-        SafeERC20Upgradeable.safeTransfer(_asset, receiver, assets);
+        _asset.transfer(receiver, assets);
         multi.withdraw(receiver, shares);
         emit Withdraw(caller, receiver, owner, assets, shares);
     }

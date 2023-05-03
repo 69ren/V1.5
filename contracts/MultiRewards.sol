@@ -8,13 +8,13 @@ import "@openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgrad
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-
+import "hardhat/console.sol";
 
 
 contract multiRewards is Initializable, AccessControlEnumerableUpgradeable, PausableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
     
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
-    bytes32 public constant NOTIFIER_ROLE = keccak256("OPERATOR_ROLE");
+    bytes32 public constant NOTIFIER_ROLE = keccak256("NOTIFIER_ROLE");
     bytes32 public constant PROXY_ADMIN_ROLE = keccak256("PROXY_ADMIN");
 
     address public elmo;
@@ -115,7 +115,7 @@ contract multiRewards is Initializable, AccessControlEnumerableUpgradeable, Paus
         emit Deposit(account, amount);
     }
 
-    function withdraw(address account, uint amount) external nonReentrant whenNotPaused updateReward(msg.sender) {
+    function withdraw(address account, uint amount) external nonReentrant whenNotPaused updateReward(account) {
         require(amount > 0, "Can't stake 0!");
         require(msg.sender == elmo, "!elmo");
 
@@ -191,7 +191,7 @@ contract multiRewards is Initializable, AccessControlEnumerableUpgradeable, Paus
             rewardData[token].rewardPerTokenStored = rewardPerToken(token);
             rewardData[token].lastUpdateTime = lastTimeRewardApplicable(token);
             if (account != address(0)) {
-                storedRewardsPerUser[account][token] = earned(account, token);
+                storedRewardsPerUser[account][token] = earned(token, account);
                 userRewardPerTokenStored[account][token] = rewardData[token]
                     .rewardPerTokenStored;
             }

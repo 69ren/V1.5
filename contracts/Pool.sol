@@ -97,19 +97,17 @@ contract Rewarder is Initializable, BaseERC20 {
         address account,
         address[] calldata tokens
     ) external view returns (uint[] memory) {
-        uint len = tokens.length;
-        uint[] memory pending = new uint[](len);
+        uint[] memory pending = new uint[](tokens.length);
         uint bal = balanceOf[account];
         uint _totalSupply = totalSupply;
 
         if (bal > 0) {
-            for (uint i; i < len; ++i) {
+            for (uint i; i < tokens.length; ++i) {
                 pending[i] += claimable[account][tokens[i]];
                 uint integral = rewardIntegral[tokens[i]].integral;
 
                 if (totalSupply > 0) {
                     uint256 delta = IBooster(booster).earned(pool,tokens[i]);
-                    //delta -= (delta * 15) / 100;
                     integral += (1e18 * delta) / _totalSupply;
                 }
 
@@ -118,7 +116,7 @@ contract Rewarder is Initializable, BaseERC20 {
                     pending[i] += (bal * (integral - integralFor)) / 1e18;
             }
         } else {
-            for (uint i; i < len; ++i) {
+            for (uint i; i < tokens.length; ++i) {
                 pending[i] = claimable[account][tokens[i]];
             }
         }
@@ -133,7 +131,7 @@ contract Rewarder is Initializable, BaseERC20 {
         IBooster(booster).getRewardFromGauge(pool, _rewards);
         unchecked {
             for (uint i; i < len; ++i) {
-                Reward memory _integral = rewardIntegral[_rewards[i]];
+                Reward storage _integral = rewardIntegral[_rewards[i]];
                 if (total > 0) {
                     uint bal = IERC20Upgradeable(_rewards[i]).balanceOf(
                         address(this)
@@ -143,7 +141,6 @@ contract Rewarder is Initializable, BaseERC20 {
                     if (_delta > 0) {
                         _integral.integral += (1e18 * _delta) / total;
                         _integral.delta = bal;
-                        rewardIntegral[_rewards[i]] = _integral;
                     }
                 }
 

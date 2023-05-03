@@ -11,6 +11,8 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 import "./interfaces/IBooster.sol";
 import "./interfaces/IPool.sol";
+import "hardhat/console.sol";
+
 
 contract PoolRouter is
     Initializable,
@@ -89,8 +91,7 @@ contract PoolRouter is
     }
 
     function getReward(address[] calldata pools) external whenNotPaused {
-        uint len = pools.length;
-        for (uint i; i < len; ) {
+        for (uint i; i < pools.length; ) {
             IPool(pools[i]).getReward(msg.sender);
             unchecked {
                 ++i;
@@ -105,9 +106,8 @@ contract PoolRouter is
         for (uint i; i < pools.length; ++i) {
             address pool = pools[i];
             address[] memory token = tokens[i];
-            uint len = token.length;
 
-            for (uint j; j < len; ++j) {
+            for (uint j; j < token.length; ++j) {
                 IPool(pool).addRewardToken(token[j]);
             }
         }

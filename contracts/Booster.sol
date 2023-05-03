@@ -136,7 +136,6 @@ contract Booster is
     */
     function depositInGauge(address pool, uint amount) external whenNotPaused {
         require(msg.sender == tokenForPool[pool], "!neadPool");
-        
         address gauge = gaugeForPool[pool];
         IGauge(gauge).deposit(amount, tokenID);
     }
@@ -157,22 +156,30 @@ contract Booster is
         require(msg.sender == tokenForPool[pool], "!neadPool");
         address gauge = gaugeForPool[pool];
         IGauge(gauge).getReward(address(this), tokens);
-
-        uint len = tokens.length;
-        for (uint i; i < len; ++i) {
-            uint bal = IERC20Upgradeable(tokens[i]).balanceOf(address(this)) -
-                unclaimedFees[tokens[i]];
-            if (bal > 0) {
-                uint fee = (bal * platformFee) / 1e18;
-                unclaimedFees[tokens[i]] += fee;
-                IERC20Upgradeable(tokens[i]).transfer(msg.sender, bal - fee);
+        unchecked {
+            for (uint i; i < tokens.length; ++i) {
+                uint bal = IERC20Upgradeable(tokens[i]).balanceOf(
+                    address(this)
+                ) - unclaimedFees[tokens[i]];
+                if (bal > 0) {
+                    uint fee = (bal * platformFee) / 1e18;
+                    bal -= fee;
+                    unclaimedFees[tokens[i]] += fee;
+                    IERC20Upgradeable(tokens[i]).transfer(msg.sender, bal);
+                }
             }
         }
     }
 
-    function earned(address pool, address token) external view returns (uint rewards) {
+    function earned(
+        address pool,
+        address token
+    ) external view returns (uint rewards) {
         address gauge = gaugeForPool[pool];
         rewards = IGauge(gauge).earned(token, address(this));
+        unchecked {
+            rewards -= (rewards * platformFee) / 1e18;
+        }
     }
 
     function poke(address token) external {
