@@ -7,20 +7,19 @@ import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./Libraries/ERC4626.sol";
-import "./interfaces/IMultiRewards.sol";
-import "hardhat/console.sol";
+import "./interfaces/INeadStake.sol";
 
-contract elmoSOLID is ERC4626, PausableUpgradeable, AccessControlEnumerableUpgradeable, UUPSUpgradeable {
+contract elmo is ERC4626, PausableUpgradeable, AccessControlEnumerableUpgradeable, UUPSUpgradeable {
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant SETTER_ROLE = keccak256("SETTER_ROLE");
     bytes32 public constant PROXY_ADMIN_ROLE = keccak256("PROXY_ADMIN");
 
-    IMultiRewards public multi;
+    INeadStake public multi;
     address public proxyAdmin;
 
     function initialize(
         IERC20Upgradeable _token,
-        IMultiRewards _multi,
+        INeadStake _multi,
         address admin,
         address setter,
         address pauser,
@@ -90,7 +89,7 @@ contract elmoSOLID is ERC4626, PausableUpgradeable, AccessControlEnumerableUpgra
     }
 
     function setAddresses(address _multi) external onlyRole(SETTER_ROLE) {
-        multi = IMultiRewards(_multi);
+        multi = INeadStake(_multi);
     }
 
     function pause() external onlyRole(PAUSER_ROLE) {
@@ -109,5 +108,7 @@ contract elmoSOLID is ERC4626, PausableUpgradeable, AccessControlEnumerableUpgra
         renounceRole(PROXY_ADMIN_ROLE, proxyAdmin);
         proxyAdmin = newAdmin;
     }
+
+    
 
 }

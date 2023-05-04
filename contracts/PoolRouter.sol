@@ -10,8 +10,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 
 import "./interfaces/IBooster.sol";
-import "./interfaces/IPool.sol";
-import "hardhat/console.sol";
+import "./interfaces/INeadPool.sol";
 
 
 contract PoolRouter is
@@ -30,12 +29,14 @@ contract PoolRouter is
     mapping(address => address) public tokenForPool;
 
     address public poolBeacon;
-    address ram;
     address public proxyAdmin;
+    address ram;
+    address public swappoor;
 
     function initialize(
         address _poolBeacon,
         IBooster _booster,
+        address _swappoor,
         address admin,
         address pauser,
         address operator,
@@ -53,8 +54,10 @@ contract PoolRouter is
         poolBeacon = _poolBeacon;
         booster = _booster;
         ram = booster.ram();
+        swappoor = _swappoor;
     }
 
+    /// @notice creating pools is permissionless, if it doesn't already exist one is created on the first deposit
     function createPool(
         address _pool,
         address _reward
@@ -82,20 +85,26 @@ contract PoolRouter is
             _pool = createPool(pool, ram);
         }
         IERC20Upgradeable(pool).transferFrom(msg.sender, address(this), amount);
-        IPool(_pool).deposit(msg.sender, amount);
+        INeadPool(_pool).deposit(msg.sender, amount);
     }
 
     function withdraw(address pool, uint amount) external whenNotPaused {
         address _pool = tokenForPool[pool];
-        IPool(_pool).withdraw(msg.sender, amount);
+        INeadPool(_pool).withdraw(msg.sender, amount);
     }
 
     function getReward(address[] calldata pools) external whenNotPaused {
         for (uint i; i < pools.length; ) {
-            IPool(pools[i]).getReward(msg.sender);
+            INeadPool(pools[i]).getReward(msg.sender);
             unchecked {
                 ++i;
             }
+        }
+    }
+
+    function claimRewards(address[] calldata pools) external whenNotPaused {
+        for (uint i; i < pools.length; ) {
+            INeadPool(pools[i]).claimRewards(msg.sender);
         }
     }
 
@@ -108,7 +117,7 @@ contract PoolRouter is
             address[] memory token = tokens[i];
 
             for (uint j; j < token.length; ++j) {
-                IPool(pool).addRewardToken(token[j]);
+                INeadPool(pool).addRewardToken(token[j]);
             }
         }
     }
@@ -123,9 +132,13 @@ contract PoolRouter is
             uint len = token.length;
 
             for (uint j; j < len; ++j) {
-                IPool(pool).removeRewardToken(token[j]);
+                INeadPool(pool).removeRewardToken(token[j]);
             }
         }
+    }
+
+    function setSwappoor(address _swappoor) external onlyRole(SETTER_ROLE) {
+        swappoor = _swappoor;
     }
 
     function pause() external onlyRole(PAUSER_ROLE) {

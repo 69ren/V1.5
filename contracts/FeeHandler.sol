@@ -5,7 +5,7 @@ import "./interfaces/Ramses/IVoter.sol";
 import "./interfaces/Ramses/IVotingEscrow.sol";
 import "./interfaces/Ramses/IGauge.sol";
 import "./interfaces/Ramses/IFeeDistributor.sol";
-import "./interfaces/IMultiRewards.sol";
+import "./interfaces/INeadStake.sol";
 import "./interfaces/ISwappoor.sol";
 import "./interfaces/IBooster.sol";
 import "./interfaces/IVeDepositor.sol";
@@ -39,7 +39,7 @@ contract feeHandler is
     address veDepositor;
     address public proxyAdmin;
 
-    IMultiRewards public neadStake;
+    INeadStake public neadStake;
     ISwappoor public swap;
     IBooster booster;
     IVoter voter;
@@ -62,7 +62,7 @@ contract feeHandler is
         address _proxyAdmin,
         ISwappoor _swap,
         IBooster _booster,
-        IMultiRewards _neadStake
+        INeadStake _neadStake
     ) external initializer {
         __Pausable_init();
         __AccessControlEnumerable_init();
@@ -216,18 +216,18 @@ contract feeHandler is
                 bool state = swap.priceOutOfSync();
                 if (state) {
                     uint amountOut = swap.swapTokens(ram, veDepositor, stakersShare);
-                    IMultiRewards(neadStake).notifyRewardAmount(veDepositor, amountOut);
+                    neadStake.notifyRewardAmount(veDepositor, amountOut);
                 } else {
                     IVeDepositor(veDepositor).depositTokens(stakersShare);
                     // neadRam is minted in a 1:1 ratio
-                    IMultiRewards(neadStake).notifyRewardAmount(veDepositor, stakersShare);
+                    neadStake.notifyRewardAmount(veDepositor, stakersShare);
                 }
             } else if (token == veDepositor) {
-                IMultiRewards(neadStake).notifyRewardAmount(veDepositor, stakersShare);
+                neadStake.notifyRewardAmount(veDepositor, stakersShare);
             } else {
                 if (!isApproved[token]) IERC20Upgradeable(token).approve(address(swap),type(uint).max);
                 uint amountOut = swap.swapTokens(token, swapTo, stakersShare);
-                IMultiRewards(neadStake).notifyRewardAmount(swapTo, amountOut);
+                neadStake.notifyRewardAmount(swapTo, amountOut);
             }
         }
     }

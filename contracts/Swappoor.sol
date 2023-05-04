@@ -21,17 +21,23 @@ contract bribeSwappoor is
 {
     bytes32 public constant SETTER_ROLE = keccak256("SETTER_ROLE");
     bytes32 public constant PROXY_ADMIN_ROLE = keccak256("PROXY_ADMIN");
-
+/**
+0x82aF49447D8a07e3bd95BD0d56f35241523fBab1
+0xAAA20D08e59F6561f242b08513D36266C5A29415
+0x1542D005D7b73c53a75D4Cd98a1a6bF3DC27842B
+0x1E50482e9185D9DAC418768D14b2F2AC2b4DAF39
+0xAAA6C1E32C55A7Bfa8066A6FAE9b42650F262418
+0x40301951Af3f80b8C1744ca77E55111dd3c1dba1
+0x1863736c768f232189F95428b5ed9A51B0eCcAe5
+ */
     // Setting all these as constants because they are unlikely to change
-    address public constant weth = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
-    IFactory constant factory =
-        IFactory(0xAAA20D08e59F6561f242b08513D36266C5A29415);
-    address constant neadRamWeth = 0x1542D005D7b73c53a75D4Cd98a1a6bF3DC27842B;
-    address constant ramWeth = 0x1E50482e9185D9DAC418768D14b2F2AC2b4DAF39;
-    address constant ram = 0xAAA6C1E32C55A7Bfa8066A6FAE9b42650F262418;
-    address constant neadRam = 0x40301951Af3f80b8C1744ca77E55111dd3c1dba1;
-    IPoolRouter constant depositor =
-        IPoolRouter(0x1863736c768f232189F95428b5ed9A51B0eCcAe5);
+    address public weth;
+    IFactory factory;
+    address neadRamWeth;
+    address ramWeth;
+    address ram;
+    address neadRam;
+    IPoolRouter poolRouter;
     uint public targetRatio;
     uint public priceBasis;
     address public proxyAdmin;
@@ -49,7 +55,13 @@ contract bribeSwappoor is
     function initialize(
         address admin,
         address setter,
-        address _proxyAdmin
+        address _proxyAdmin,
+        address _weth,
+        IFactory poolFactory, // ramses pool factory
+        address _neadRamWeth,
+        address _ram,
+        address _neadRam,
+        IPoolRouter _poolRouter
     ) external initializer {
         __AccessControlEnumerable_init();
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
@@ -57,6 +69,13 @@ contract bribeSwappoor is
         _grantRole(PROXY_ADMIN_ROLE, _proxyAdmin);
         _setRoleAdmin(PROXY_ADMIN_ROLE, PROXY_ADMIN_ROLE);
         proxyAdmin = _proxyAdmin;
+
+        weth = _weth;
+        factory = poolFactory;
+        neadRamWeth = _neadRamWeth;
+        ram = _ram;
+        neadRam = _neadRam;
+        poolRouter = _poolRouter;
     }
 
     // @notice checks if neadRam in or close to peg
@@ -196,7 +215,7 @@ contract bribeSwappoor is
      */
     function approveDepositor() external {
         IERC20Upgradeable(neadRamWeth).approve(
-            address(depositor),
+            address(poolRouter),
             type(uint).max
         );
     }
@@ -224,8 +243,8 @@ contract bribeSwappoor is
         IERC20Upgradeable(tokenA).transfer(neadRamWeth, amountA - swapAmount);
         IERC20Upgradeable(tokenB).transfer(neadRamWeth, amountB);
         uint liquidity = IPair(neadRamWeth).mint(address(this));
-        depositor.deposit(neadRamWeth, liquidity);
-        IERC20Upgradeable(depositor.tokenForPool(neadRamWeth)).transfer(
+        poolRouter.deposit(neadRamWeth, liquidity);
+        IERC20Upgradeable(poolRouter.tokenForPool(neadRamWeth)).transfer(
             to,
             liquidity
         );

@@ -4,7 +4,7 @@ pragma solidity 0.8.19;
 import "./interfaces/Ramses/IVotingEscrow.sol";
 import "./Libraries/ERC20.sol";
 import "./interfaces/Ramses/IRewardsDistributor.sol";
-import "./interfaces/IMultiRewards.sol";
+import "./interfaces/INeadStake.sol";
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
@@ -186,7 +186,7 @@ contract VeDepositor is
 
         if (amount > 0) {
             _mint(address(this), amount);
-            IMultiRewards(neadStake).notifyRewardAmount(address(this), amount);
+            INeadStake(neadStake).notifyRewardAmount(address(this), amount);
         }
 
         return true;

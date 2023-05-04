@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.19;
 
-interface IMultiRewards {
+interface INeadStake {
     function notifyRewardAmount(address token, uint amount) external;
     function deposit(address account, uint amount) external;
     function withdraw(address account, uint amount) external;
