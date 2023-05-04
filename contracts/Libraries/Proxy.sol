@@ -22,13 +22,20 @@ contract EnneadProxy is Proxy, ERC1967Upgrade {
     constructor() {}
 
     function initialize(address _logic, bytes memory _data) external payable {
+        require(_getAdmin() == address(0), "Already Initialzied");
         _upgradeToAndCall(_logic, _data, false);
     }
 
     /**
      * @dev Returns the current implementation address.
      */
-    function _implementation() internal view virtual override returns (address impl) {
+    function _implementation()
+        internal
+        view
+        virtual
+        override
+        returns (address impl)
+    {
         return ERC1967Upgrade._getImplementation();
     }
 }
