@@ -50,6 +50,10 @@ contract neadStake is Initializable, AccessControlEnumerableUpgradeable, Pausabl
         uint256 amount
     );
 
+    constructor() {
+        _disableInitializers();
+    }
+    
     function initialize(address _elmo, address admin, address pauser, address notifier, address _proxyAdmin) external initializer {
         __ReentrancyGuard_init();
         __Pausable_init();
@@ -205,5 +209,9 @@ contract neadStake is Initializable, AccessControlEnumerableUpgradeable, Pausabl
         grantRole(PROXY_ADMIN_ROLE, newAdmin);
         renounceRole(PROXY_ADMIN_ROLE, proxyAdmin);
         proxyAdmin = newAdmin;
+    }
+
+    function getImplementation() external view returns (address) {
+        return _getImplementation();
     }
 }

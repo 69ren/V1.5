@@ -22,7 +22,7 @@ contract EnneadProxy is Proxy, ERC1967Upgrade {
     constructor() {}
 
     function initialize(address _logic, bytes memory _data) external payable {
-        require(_getAdmin() == address(0), "Already Initialzied");
+        require(_implementation() == address(0), "Already Initialzied");
         _upgradeToAndCall(_logic, _data, false);
     }
 

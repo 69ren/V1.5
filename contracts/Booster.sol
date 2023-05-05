@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.19;
 
-import "./interfaces/Ramses/IVoter.sol";
-import "./interfaces/Ramses/IVotingEscrow.sol";
-import "./interfaces/Ramses/IGauge.sol";
-import "./interfaces/Ramses/IFeeDistributor.sol";
+import "./interfaces/SoliSnek/IVoter.sol";
+import "./interfaces/SoliSnek/IVotingEscrow.sol";
+import "./interfaces/SoliSnek/IGauge.sol";
+import "./interfaces/SoliSnek/IFeeDistributor.sol";
 
 import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgradeable.sol";
@@ -29,7 +29,7 @@ contract Booster is
     address public veDepositor;
     address public feeHandler;
     address public poolRouter;
-    address public ram;
+    address public snek;
 
     uint public tokenID;
     uint public platformFee; // mirrored from feeHandler to reduce external calls
@@ -65,7 +65,7 @@ contract Booster is
 
         voter = _voter;
         votingEscrow = IVotingEscrow(voter._ve());
-        ram = voter.base();
+        snek = voter.base();
     }
 
     function setAddresses(
@@ -213,5 +213,9 @@ contract Booster is
         grantRole(PROXY_ADMIN_ROLE, newAdmin);
         renounceRole(PROXY_ADMIN_ROLE, proxyAdmin);
         proxyAdmin = newAdmin;
+    }
+
+    function getImplementation() external view returns (address) {
+        return _getImplementation();
     }
 }

@@ -17,6 +17,10 @@ contract elmo is ERC4626, PausableUpgradeable, AccessControlEnumerableUpgradeabl
     INeadStake public multi;
     address public proxyAdmin;
 
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize(
         IERC20Upgradeable _token,
         INeadStake _multi,
@@ -109,6 +113,8 @@ contract elmo is ERC4626, PausableUpgradeable, AccessControlEnumerableUpgradeabl
         proxyAdmin = newAdmin;
     }
 
-    
+    function getImplementation() external view returns (address) {
+        return _getImplementation();
+    }
 
 }

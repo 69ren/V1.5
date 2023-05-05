@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.19;
 
-import "./interfaces/Ramses/IRouter.sol";
-import "./interfaces/Ramses/IFactory.sol";
-import "./interfaces/Ramses/IPair.sol";
+import "./interfaces/SoliSnek/IRouter.sol";
+import "./interfaces/SoliSnek/IFactory.sol";
+import "./interfaces/SoliSnek/IPair.sol";
 import "./interfaces/IPoolRouter.sol";
 
 import "@openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgradeable.sol";
@@ -33,10 +33,10 @@ contract bribeSwappoor is
     // Setting all these as constants because they are unlikely to change
     address public weth;
     IFactory factory;
-    address neadRamWeth;
-    address ramWeth;
-    address ram;
-    address neadRam;
+    address neadSnekWeth;
+    address snekWeth;
+    address snek;
+    address neadSnek;
     IPoolRouter poolRouter;
     uint public targetRatio;
     uint public priceBasis;
@@ -57,10 +57,10 @@ contract bribeSwappoor is
         address setter,
         address _proxyAdmin,
         address _weth,
-        IFactory poolFactory, // ramses pool factory
-        address _neadRamWeth,
-        address _ram,
-        address _neadRam,
+        IFactory poolFactory, // solisnek pool factory
+        address _neadSnekWeth,
+        address _snek,
+        address _neadSnek,
         IPoolRouter _poolRouter
     ) external initializer {
         __AccessControlEnumerable_init();
@@ -72,20 +72,20 @@ contract bribeSwappoor is
 
         weth = _weth;
         factory = poolFactory;
-        neadRamWeth = _neadRamWeth;
-        ram = _ram;
-        neadRam = _neadRam;
+        neadSnekWeth = _neadSnekWeth;
+        snek = _snek;
+        neadSnek = _neadSnek;
         poolRouter = _poolRouter;
     }
 
-    // @notice checks if neadRam in or close to peg
+    // @notice checks if neadSnek in or close to peg
     // @dev using the built in twap price feeds from baseV1Pair.
     function priceOutOfSync() public view returns (bool state) {
-        // get current twap price of 100 neadRam in weth
-        uint priceInWeth = IPair(neadRamWeth).current(neadRam, priceBasis);
-        // get current twap of priceInWeth in ram
-        uint priceInRam = IPair(ramWeth).current(weth, priceInWeth);
-        state = priceInRam >= targetRatio ? false : true;
+        // get current twap price of 100 neadSnek in weth
+        uint priceInWeth = IPair(neadSnekWeth).current(neadSnek, priceBasis);
+        // get current twap of priceInWeth in snek
+        uint priceInSnek = IPair(snekWeth).current(weth, priceInWeth);
+        state = priceInSnek >= targetRatio ? false : true;
     }
 
     function setTargetRatio(uint ratio) external onlyRole(SETTER_ROLE) {
@@ -166,7 +166,7 @@ contract bribeSwappoor is
         uint decimals1
     ) internal pure returns (uint) {
         uint amountB;
-        // gas savings, ramses pair contract would revert anyway if amountOut under/overflows
+        // gas savings, soliSnek pair contract would revert anyway if amountOut under/overflows
         unchecked {
             if (!stable) {
                 amountB = (amountA * reserve1) / (reserve0 * 10000 + amountA);
@@ -211,22 +211,22 @@ contract bribeSwappoor is
     }
 
     /**
-     * @notice approve lpDepositor to spend neadRam/weth lp
+     * @notice approve lpDepositor to spend neadSnek/weth lp
      */
     function approveDepositor() external {
-        IERC20Upgradeable(neadRamWeth).approve(
+        IERC20Upgradeable(neadSnekWeth).approve(
             address(poolRouter),
             type(uint).max
         );
     }
 
     /*
-     * @notice zaps weth or neadRam to neadRam/weth lp only
+     * @notice zaps weth or neadSnek to neadSnek/weth lp only
      */
     function zapIn(bool isWeth, uint amountA, address to) external {
         address tokenA;
         address tokenB;
-        (tokenA, tokenB) = isWeth ? (weth, neadRam) : (neadRam, weth);
+        (tokenA, tokenB) = isWeth ? (weth, neadSnek) : (neadSnek, weth);
 
         IERC20Upgradeable(tokenA).transferFrom(
             msg.sender,
@@ -236,15 +236,15 @@ contract bribeSwappoor is
         (uint amountB, uint swapAmount) = _swapToLp(
             tokenA,
             tokenB,
-            neadRamWeth,
+            neadSnekWeth,
             amountA
         );
 
-        IERC20Upgradeable(tokenA).transfer(neadRamWeth, amountA - swapAmount);
-        IERC20Upgradeable(tokenB).transfer(neadRamWeth, amountB);
-        uint liquidity = IPair(neadRamWeth).mint(address(this));
-        poolRouter.deposit(neadRamWeth, liquidity);
-        IERC20Upgradeable(poolRouter.tokenForPool(neadRamWeth)).transfer(
+        IERC20Upgradeable(tokenA).transfer(neadSnekWeth, amountA - swapAmount);
+        IERC20Upgradeable(tokenB).transfer(neadSnekWeth, amountB);
+        uint liquidity = IPair(neadSnekWeth).mint(address(this));
+        poolRouter.deposit(neadSnekWeth, liquidity);
+        IERC20Upgradeable(poolRouter.tokenForPool(neadSnekWeth)).transfer(
             to,
             liquidity
         );
@@ -478,5 +478,9 @@ contract bribeSwappoor is
         grantRole(PROXY_ADMIN_ROLE, newAdmin);
         renounceRole(PROXY_ADMIN_ROLE, proxyAdmin);
         proxyAdmin = newAdmin;
+    }
+
+    function getImplementation() external view returns (address) {
+        return _getImplementation();
     }
 }

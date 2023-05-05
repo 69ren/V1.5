@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.19;
+pragma solidity ^0.8.19;
 
 import "./Libraries/Proxy.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgradeable.sol";
@@ -16,6 +16,11 @@ contract EnneadProxyDeployer is
     bytes32 public constant DEPLOYER_ROLE = keccak256("DEPLOYER_ROLE");
     bytes32 public constant PROXY_ADMIN_ROLE = keccak256("PROXY_ADMIN");
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+    
     function initialize(
         address _proxyAdmin,
         address admin,
@@ -61,23 +66,6 @@ contract EnneadProxyDeployer is
         return deployedProxies;
     }
 
-    function getBytecode() public pure returns (bytes32 initCodeHash) {
-        bytes memory bytecode = type(EnneadProxy).creationCode;
-        initCodeHash = keccak256(abi.encodePacked(bytecode));
-    }
-
-    function computeAddress(
-        uint256 salt,
-        bytes memory bytecode,
-        address contractAddress
-    ) public pure returns (address) {
-        uint8 prefix = 0xff;
-        bytes32 initCodeHash = keccak256(abi.encodePacked(bytecode));
-        bytes32 hash = keccak256(
-            abi.encodePacked(prefix, contractAddress, salt, initCodeHash)
-        );
-        return address(uint160(uint256(hash)));
-    }
 
     function _authorizeUpgrade(
         address newImplementation
@@ -88,5 +76,9 @@ contract EnneadProxyDeployer is
         grantRole(PROXY_ADMIN_ROLE, newAdmin);
         renounceRole(PROXY_ADMIN_ROLE, proxyAdmin);
         proxyAdmin = newAdmin;
+    }
+
+    function getImplementation() external view returns (address) {
+        return _getImplementation();
     }
 }

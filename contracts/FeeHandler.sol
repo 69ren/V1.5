@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.19;
 
-import "./interfaces/Ramses/IVoter.sol";
-import "./interfaces/Ramses/IVotingEscrow.sol";
-import "./interfaces/Ramses/IGauge.sol";
-import "./interfaces/Ramses/IFeeDistributor.sol";
+import "./interfaces/SoliSnek/IVoter.sol";
+import "./interfaces/SoliSnek/IVotingEscrow.sol";
+import "./interfaces/SoliSnek/IGauge.sol";
+import "./interfaces/SoliSnek/IFeeDistributor.sol";
 import "./interfaces/INeadStake.sol";
 import "./interfaces/ISwappoor.sol";
 import "./interfaces/IBooster.sol";
@@ -34,7 +34,7 @@ contract feeHandler is
     bytes32 public constant PROXY_ADMIN_ROLE = keccak256("PROXY_ADMIN");
 
     address public treasury;
-    address public ram;
+    address public snek;
     address public swapTo;
     address veDepositor;
     address public proxyAdmin;
@@ -54,6 +54,10 @@ contract feeHandler is
     mapping(address => bool) isApproved; // check if swapper is approved to spend a token
     // pool -> bribe
     mapping(address => address) public bribeForPool;
+
+    constructor() {
+        _disableInitializers();
+    }
 
     function initialize(
         address _treasury,
@@ -78,15 +82,15 @@ contract feeHandler is
         booster = _booster;
         voter = IVoter(_booster.voter());
         tokenID = booster.tokenID();
-        ram = _booster.ram();
+        snek = _booster.snek();
         veDepositor = _booster.veDepositor();
         neadStake = _neadStake;
         swapTo = swap.weth();
         IERC20Upgradeable(swapTo).approve(address(_neadStake), type(uint).max);
 
-        IERC20Upgradeable(ram).approve(address(swap), type(uint).max);
-        IERC20Upgradeable(ram).approve(veDepositor, type(uint).max);
-        isApproved[ram] = true;
+        IERC20Upgradeable(snek).approve(address(swap), type(uint).max);
+        IERC20Upgradeable(snek).approve(veDepositor, type(uint).max);
+        isApproved[snek] = true;
         IERC20Upgradeable(veDepositor).approve(address(swap), type(uint).max);
         IERC20Upgradeable(veDepositor).approve(
             address(neadStake),
@@ -139,7 +143,7 @@ contract feeHandler is
         feeDist.getReward(tokenID, bribes);
     }
 
-    /// @notice swaps bribes to weth, or locks to neadRam if the reward token is ram and notifies multiRewards
+    /// @notice swaps bribes to weth, or locks to neadSnek if the reward token is snek and notifies multiRewards
     function processBribes(address pool, address to) public {
         address[] memory tokens = claimBribes(pool);
         uint len = tokens.length;
@@ -152,7 +156,7 @@ contract feeHandler is
 
                 if (bal > 0) {
                     fee = (bal * bribeCallFee) / 1e18;
-                    if (tokens[i] == ram) {
+                    if (tokens[i] == snek) {
                         IERC20Upgradeable(tokens[i]).transfer(to, fee);
                         IVeDepositor(veDepositor).depositTokens(bal - fee);
                         neadStake.notifyRewardAmount(veDepositor, bal - fee);
@@ -212,14 +216,14 @@ contract feeHandler is
                 stakersShare = (fee * stakerFee) / platformFee;
             }
             _token.transfer(treasury, treasuryShare);
-            if (token == ram) {
+            if (token == snek) {
                 bool state = swap.priceOutOfSync();
                 if (state) {
-                    uint amountOut = swap.swapTokens(ram, veDepositor, stakersShare);
+                    uint amountOut = swap.swapTokens(snek, veDepositor, stakersShare);
                     neadStake.notifyRewardAmount(veDepositor, amountOut);
                 } else {
                     IVeDepositor(veDepositor).depositTokens(stakersShare);
-                    // neadRam is minted in a 1:1 ratio
+                    // neadSnek is minted in a 1:1 ratio
                     neadStake.notifyRewardAmount(veDepositor, stakersShare);
                 }
             } else if (token == veDepositor) {
@@ -253,5 +257,9 @@ contract feeHandler is
         grantRole(PROXY_ADMIN_ROLE, newAdmin);
         renounceRole(PROXY_ADMIN_ROLE, proxyAdmin);
         proxyAdmin = newAdmin;
+    }
+
+    function getImplementation() external view returns (address) {
+        return _getImplementation();
     }
 }

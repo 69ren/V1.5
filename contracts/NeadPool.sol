@@ -32,8 +32,8 @@ contract neadPool is Initializable, BaseERC20 {
     address poolRouter;
     address pool;
 
-    address ram;
-    address neadRam;
+    address snek;
+    address neadSnek;
 
     // events
     event RewardPaid(
@@ -69,13 +69,13 @@ contract neadPool is Initializable, BaseERC20 {
         _symbol = string(abi.encodePacked("nead-", _symbol));
         ERC20Init(_name, _symbol);
 
-        ram = IBooster(_booster).ram();
-        neadRam = IBooster(_booster).veDepositor();
+        snek = IBooster(_booster).snek();
+        neadSnek = IBooster(_booster).veDepositor();
         IERC20Upgradeable(IPoolRouter(_poolRouter).swappoor()).approve(
             _reward,
             type(uint).max
         );
-        IERC20Upgradeable(ram).approve(neadRam, type(uint).max);
+        IERC20Upgradeable(snek).approve(neadSnek, type(uint).max);
     }
 
     function deposit(
@@ -193,7 +193,7 @@ contract neadPool is Initializable, BaseERC20 {
         }
     }
 
-    /// @notice claim neadRam instead of ram
+    /// @notice claim neadSnek instead of snek
     function claimRewards(address account) external updateRewards(account) {
         require(msg.sender == account || msg.sender == poolRouter);
 
@@ -206,7 +206,7 @@ contract neadPool is Initializable, BaseERC20 {
                 delete claimable[account][_rewards[i]];
                 if (claims > 0) {
                     if (i != 0) {
-                        // ram is always index 0
+                        // snek is always index 0
                         IERC20Upgradeable(_rewards[i]).transfer(
                             account,
                             claims
@@ -220,21 +220,21 @@ contract neadPool is Initializable, BaseERC20 {
                         if (state) {
                             uint amountOut = swap.swapTokens(
                                 _rewards[i],
-                                neadRam,
+                                neadSnek,
                                 claims
                             );
-                            IERC20Upgradeable(neadRam).transfer(
+                            IERC20Upgradeable(neadSnek).transfer(
                                 account,
                                 amountOut
                             );
-                            emit RewardPaid(account, neadRam, amountOut);
+                            emit RewardPaid(account, neadSnek, amountOut);
                         } else {
-                            IVeDepositor(neadRam).depositTokens(claims);
-                            IERC20Upgradeable(neadRam).transfer(
+                            IVeDepositor(neadSnek).depositTokens(claims);
+                            IERC20Upgradeable(neadSnek).transfer(
                                 account,
                                 claims
                             );
-                            emit RewardPaid(account, neadRam, claims);
+                            emit RewardPaid(account, neadSnek, claims);
                         }
                     }
                 }
@@ -260,7 +260,7 @@ contract neadPool is Initializable, BaseERC20 {
         require(msg.sender == poolRouter);
         // 0 balance assumes each user has already claimed their rewards.
         require(IERC20Upgradeable(token).balanceOf(address(this)) == 0);
-        // ram will always be index 0, can't remove that.
+        // snek will always be index 0, can't remove that.
         require(token != rewards[0]);
 
         address[] memory _rewards = rewards;

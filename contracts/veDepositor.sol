@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.19;
 
-import "./interfaces/Ramses/IVotingEscrow.sol";
+import "./interfaces/SoliSnek/IVotingEscrow.sol";
 import "./Libraries/ERC20.sol";
-import "./interfaces/Ramses/IRewardsDistributor.sol";
+import "./interfaces/SoliSnek/IRewardsDistributor.sol";
 import "./interfaces/INeadStake.sol";
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -56,13 +56,13 @@ contract VeDepositor is
     ) public initializer {
         __Pausable_init();
         __AccessControlEnumerable_init();
-        ERC20Init("neadRAM: Tokenized veRAM", "neadRAM");
+        ERC20Init("neadSNEK: Tokenized veSNEK", "neadSnek");
 
         token = _token;
         votingEscrow = _votingEscrow;
         veDistributor = _veDist;
 
-        // approve vesting escrow to transfer RAM (for adding to lock)
+        // approve vesting escrow to transfer SNEK (for adding to lock)
         _token.approve(address(_votingEscrow), type(uint256).max);
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
@@ -97,7 +97,7 @@ contract VeDepositor is
     ) external whenNotPaused returns (bytes4) {
         require(
             msg.sender == address(votingEscrow),
-            "Can only receive veRAM NFTs"
+            "Can only receive veSNEK NFTs"
         );
 
         require(_tokenID > 0, "Cannot receive zero tokenID");
@@ -124,7 +124,7 @@ contract VeDepositor is
     }
 
     /**
-        @notice Merge a veRAM NFT previously sent to this contract with the main NFT
+        @notice Merge a veSNEK NFT previously sent to this contract with the main NFT
         @dev This is primarily meant to allow claiming balances from NFTs incorrectly sent using `transferFrom`.
         @param _tokenID ID of the NFT to merge
         @return bool success
@@ -145,8 +145,8 @@ contract VeDepositor is
     }
 
     /**
-        @notice Deposit RAM tokens and mint neadRAM
-        @param _amount Amount of RAM to deposit
+        @notice Deposit SNEK tokens and mint neadSNEK
+        @param _amount Amount of SNEK to deposit
         @return bool success
      */
     function depositTokens(
@@ -163,8 +163,8 @@ contract VeDepositor is
     }
 
     /**
-        @notice Extend the lock time of the protocol's veRAM NFT
-        @dev Lock times are also extended each time new neadRAM is minted.
+        @notice Extend the lock time of the protocol's veSNEK NFT
+        @dev Lock times are also extended each time new neadSNEK is minted.
      */
     function extendLockTime() public {
         uint256 maxUnlock = ((block.timestamp + MAX_LOCK_TIME) / WEEK) * WEEK;
@@ -176,7 +176,7 @@ contract VeDepositor is
     }
 
     /**
-        @notice claim weekly veRam rebase and mint new tokens
+        @notice claim weekly veSNEK rebase and mint new tokens
     */
     function claimRebase() external whenNotPaused returns (bool) {
         veDistributor.claim(tokenID);
@@ -201,5 +201,9 @@ contract VeDepositor is
         grantRole(PROXY_ADMIN_ROLE, newAdmin);
         renounceRole(PROXY_ADMIN_ROLE, proxyAdmin);
         proxyAdmin = newAdmin;
+    }
+
+    function getImplementation() external view returns (address) {
+        return _getImplementation();
     }
 }

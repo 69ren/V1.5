@@ -30,8 +30,12 @@ contract PoolRouter is
 
     address public poolBeacon;
     address public proxyAdmin;
-    address ram;
+    address snek;
     address public swappoor;
+
+    constructor() {
+        _disableInitializers();
+    }
 
     function initialize(
         address _poolBeacon,
@@ -53,7 +57,7 @@ contract PoolRouter is
         proxyAdmin = _proxyAdmin;
         poolBeacon = _poolBeacon;
         booster = _booster;
-        ram = booster.ram();
+        snek = booster.snek();
         swappoor = _swappoor;
     }
 
@@ -82,7 +86,7 @@ contract PoolRouter is
     function deposit(address pool, uint amount) external whenNotPaused {
         address _pool = tokenForPool[pool];
         if (_pool == address(0)) {
-            _pool = createPool(pool, ram);
+            _pool = createPool(pool, snek);
         }
         IERC20Upgradeable(pool).transferFrom(msg.sender, address(this), amount);
         INeadPool(_pool).deposit(msg.sender, amount);
@@ -158,4 +162,7 @@ contract PoolRouter is
         proxyAdmin = newAdmin;
     }
 
+    function getImplementation() external view returns (address) {
+        return _getImplementation();
+    }
 }
